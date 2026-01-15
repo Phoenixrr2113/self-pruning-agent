@@ -43,11 +43,17 @@ After each response, you MAY suggest messages to prune when:
 
 Only suggest pruning when you're confident the information is no longer needed.
 
+**IMPORTANT**: Always include a conversational response BEFORE any prune suggestions.
+For example: "Great, I've noted that! What else can I help you with?" followed by prune_suggestions.
+Never respond with ONLY prune suggestions - the user should see a helpful message.
+
 Format your suggestions at the END of your response:
 
 <prune_suggestions>
-  <suggestion id="msg:XXX" confidence="0.9" tokens="1234" reason="Brief explanation" />
+  <suggestion id="msg:XXX" confidence="0.9" tokens="1234" reason="[Brief summary of content]: Why it can be pruned" />
 </prune_suggestions>
+
+Example reason: "Weather data (NYC: 72°F sunny, LA: 85°F cloudy): Research complete, data synthesized"
 
 Guidelines:
 - Only suggest pruning at confidence >= 0.8

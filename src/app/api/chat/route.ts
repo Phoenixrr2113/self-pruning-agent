@@ -1,11 +1,11 @@
-import { streamText, tool, convertToModelMessages, UIMessage, stepCountIs } from 'ai';
+import { streamText, tool, UIMessage, stepCountIs } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { buildSystemPrompt } from '@/lib/prompts/system';
-import { countMessageTokens } from '@/lib/middleware/token-counter';
 import { parsePruneSuggestions } from '@/lib/middleware/prune-parser';
+import { injectMetadata, formatWithMetadata } from '@/lib/middleware/metadata-injector';
 import { defaultConfig } from '@/lib/config';
-import { storeUsage } from '@/lib/usage-store';
+import { storeUsage, addPrunedMessage, getPrunedIds, getPruneSummaries } from '@/lib/usage-store';
 import type { ContextBudget, ArchivedMessage } from '@/lib/types';
 
 // Allow streaming responses up to 30 seconds
@@ -17,16 +17,50 @@ const pruneArchive: ArchivedMessage[] = [];
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
 
-  // Convert UI messages to model messages
-  const modelMessages = await convertToModelMessages(messages);
+  // Inject metadata into messages so model can see [msg:xxx][tokens:n][tally:n]
+  const taggedMessages = injectMetadata(messages);
 
-  // Calculate current token usage  
-  const usedTokens = modelMessages.reduce(
-    (acc, msg) => acc + countMessageTokens(
-      typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
-    ),
-    0
-  );
+  // Get previously pruned message IDs
+  const prunedIds = getPrunedIds();
+  const pruneSummaries = getPruneSummaries();
+
+  // Filter out pruned messages and convert to model format
+  const modelMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
+
+  // Add summary breadcrumbs for pruned content if any
+  if (pruneSummaries.length > 0) {
+    const breadcrumbText = pruneSummaries
+      .map(s => `[pruned:${s.id}] ${s.summary}`)
+      .join('\n');
+    modelMessages.push({
+      role: 'system',
+      content: `[Context Summary - Previously Pruned]\n${breadcrumbText}`,
+    });
+  }
+
+  // Add remaining messages (skip pruned ones)
+  taggedMessages.forEach((msg, index) => {
+    const msgId = `msg:${String(index + 1).padStart(3, '0')}`;
+    if (!prunedIds.has(msgId)) {
+      modelMessages.push({
+        role: msg.role as 'user' | 'assistant',
+        content: formatWithMetadata(msg),
+      });
+    } else {
+      console.log(`[Prune] Skipping ${msgId} - previously pruned`);
+    }
+  });
+
+  // Log what's being sent to model
+  console.log('[Metadata] Messages being sent to model:');
+  modelMessages.forEach((msg, i) => {
+    console.log(`  ${i + 1}. [${msg.role}] ${msg.content.substring(0, 100)}...`);
+  });
+
+  // Use running tally from last message for budget
+  const usedTokens = taggedMessages.length > 0
+    ? taggedMessages[taggedMessages.length - 1].runningTally
+    : 0;
 
   const budget: ContextBudget = {
     total: defaultConfig.maxContextTokens,
@@ -110,7 +144,13 @@ export async function POST(req: Request) {
 
         if (approved.length > 0) {
           console.log('[Self-Pruning] Approved for pruning:', approved);
-          // In production: would execute pruning and update message history
+
+          // Store approved prunes in global store - they'll be filtered on next request
+          approved.forEach(suggestion => {
+            addPrunedMessage(suggestion.id, suggestion.reason, suggestion.tokens);
+          });
+
+          console.log('[Self-Pruning] Pruned messages will be skipped on next request');
         }
       }
     },

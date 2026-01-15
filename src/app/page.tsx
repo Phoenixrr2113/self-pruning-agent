@@ -158,8 +158,8 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      {/* Header with budget */}
-      <header className="border-b border-border bg-card">
+      {/* Sticky Header with budget */}
+      <header className="sticky top-0 z-10 border-b border-border bg-card">
         <div className="mx-auto max-w-3xl px-4 py-3 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-semibold">Self-Pruning Agent</h1>
@@ -184,7 +184,15 @@ export default function ChatPage() {
 
           {messages.map((msg) => {
             const textParts = msg.parts?.filter(p => p.type === 'text') || [];
-            const text = textParts.map(p => (p as { text: string }).text).join('');
+            const rawText = textParts.map(p => (p as { text: string }).text).join('');
+
+            // Strip prune_suggestions XML from displayed text
+            const text = rawText.replace(/<prune_suggestions>[\s\S]*?<\/prune_suggestions>/g, '').trim();
+
+            // Skip assistant messages that are empty after stripping (prune-only responses)
+            if (!text && msg.role === 'assistant') {
+              return null;
+            }
 
             // Check for tool parts
             const toolParts = msg.parts?.filter(p =>
@@ -243,8 +251,8 @@ export default function ChatPage() {
       {/* Prune Archive */}
       <PruneArchive />
 
-      {/* Input */}
-      <div className="border-t border-border bg-card p-4">
+      {/* Sticky Input */}
+      <div className="sticky bottom-0 z-10 border-t border-border bg-card p-4">
         <form onSubmit={handleSubmit} className="mx-auto max-w-3xl flex gap-2">
           <Input
             value={input}
