@@ -5,7 +5,6 @@ import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { ContextBudgetDisplay } from '@/components/context-budget';
 import { PruneArchive } from '@/components/prune-archive';
 import { PruneSettings } from '@/components/prune-settings';
@@ -157,9 +156,9 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-background">
-      {/* Sticky Header with budget */}
-      <header className="sticky top-0 z-10 border-b border-border bg-card">
+    <div className="flex h-screen flex-col bg-background overflow-hidden">
+      {/* Header with budget - fixed height */}
+      <header className="flex-shrink-0 border-b border-border bg-card">
         <div className="mx-auto max-w-3xl px-4 py-3 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-semibold">Self-Pruning Agent</h1>
@@ -172,8 +171,8 @@ export default function ChatPage() {
         <ContextBudgetDisplay budget={budget} />
       </header>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1">
+      {/* Messages - scrollable middle section */}
+      <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl space-y-4 p-4">
           {messages.length === 0 && (
             <div className="text-center text-muted-foreground py-8">
@@ -246,13 +245,13 @@ export default function ChatPage() {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Prune Archive */}
       <PruneArchive />
 
-      {/* Sticky Input */}
-      <div className="sticky bottom-0 z-10 border-t border-border bg-card p-4">
+      {/* Input - fixed height footer */}
+      <div className="flex-shrink-0 border-t border-border bg-card p-4">
         <form onSubmit={handleSubmit} className="mx-auto max-w-3xl flex gap-2">
           <Input
             value={input}
